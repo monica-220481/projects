@@ -1,34 +1,10 @@
-// Database constants
-const DB_NAME = 'SCHOOL-DB';
-const DB_VERSION = 1;
-const STORE_NAME = 'STUDENT-TABLE';
+// Database Connection Constants
+const CONN_TOKEN = ""; // Put your JsonPowerDB Connection Token here
+const DB_NAME = "SCHOOL-DB";
+const REL_NAME = "STUDENT-TABLE";
+const JPDB_BASE_URL = "http://api.login2explore.com:5577";
 
-let db = null;
-
-// Initialize Database on Page Load
-function initDb() {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-        request.onerror = (event) => {
-            showToast('Database failed to open: ' + event.target.errorCode, 'error');
-            reject(event.target.errorCode);
-        };
-
-        request.onsuccess = (event) => {
-            db = event.target.result;
-            showToast('Connected to SCHOOL-DB database locally.', 'info');
-            resolve(db);
-        };
-
-        request.onupgradeneeded = (event) => {
-            const dbInstance = event.target.result;
-            if (!dbInstance.objectStoreNames.contains(STORE_NAME)) {
-                dbInstance.createObjectStore(STORE_NAME, { keyPath: 'rollNo' });
-            }
-        };
-    });
-}
+let currentRecNo = null;
 
 // DOM Elements
 const form = document.getElementById('enrollmentForm');
@@ -67,6 +43,7 @@ function showToast(message, type = 'info') {
 // Set form to Step 2 initial state
 function setInitialState() {
     form.reset();
+    currentRecNo = null;
     
     // Enable Roll No, disable all other fields
     rollNoInput.disabled = false;
@@ -83,8 +60,8 @@ function setInitialState() {
     }, 50);
 }
 
-// Check database for existing Roll-No
-function checkRollNo() {
+// Check JsonPowerDB for existing Roll-No
+async function checkRollNo() {
     const rollNo = rollNoInput.value.trim();
     if (!rollNo) return;
 
@@ -93,26 +70,53 @@ function checkRollNo() {
         return;
     }
 
-    if (!db) {
-        showToast('Database is not initialized yet.', 'error');
+    if (!CONN_TOKEN) {
+        showToast("Please open app.js and paste your JsonPowerDB Connection Token at the top.", "error");
         return;
     }
 
-    const transaction = db.transaction([STORE_NAME], 'readonly');
-    const objectStore = transaction.objectStore(STORE_NAME);
-    const request = objectStore.get(rollNo);
+    try {
+        const getReq = {
+            token: CONN_TOKEN,
+            dbName: DB_NAME,
+            rel: REL_NAME,
+            cmd: "GET_BY_KEY",
+            jsonStr: {
+                rollNo: rollNo
+            }
+        };
 
-    request.onsuccess = (event) => {
-        const student = event.target.result;
+        const response = await fetch(`${JPDB_BASE_URL}/api/irl`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(getReq)
+        });
+
+        const res = await response.json();
         
-        if (student) {
+        if (res.status === 200) {
             // Case 1: Primary key exists in database
+            // Parse data: JPDB returns a JSON string inside res.data, or direct object
+            let recordData;
+            if (typeof res.data === 'string') {
+                const parsedData = JSON.parse(res.data);
+                recordData = parsedData.record || parsedData;
+                currentRecNo = parsedData.rec_no;
+            } else if (res.data && res.data.record) {
+                recordData = res.data.record;
+                currentRecNo = res.data.rec_no;
+            } else {
+                recordData = res.data;
+            }
+
             // Populate all fields
-            fullNameInput.value = student.fullName;
-            classInput.value = student.studentClass;
-            birthDateInput.value = student.birthDate;
-            enrollmentDateInput.value = student.enrollmentDate;
-            addressInput.value = student.address;
+            fullNameInput.value = recordData.fullName || '';
+            classInput.value = recordData.studentClass || '';
+            birthDateInput.value = recordData.birthDate || '';
+            enrollmentDateInput.value = recordData.enrollmentDate || '';
+            addressInput.value = recordData.address || '';
 
             // Enable Update and Reset buttons
             btnUpdate.disabled = false;
@@ -123,14 +127,14 @@ function checkRollNo() {
             rollNoInput.disabled = true;
             inputFields.forEach(field => field.disabled = false);
 
-            showToast('Student record found and loaded.', 'success');
+            showToast('Student record found and loaded from JsonPowerDB.', 'success');
             
             // Move cursor to the next field (Full Name)
             setTimeout(() => {
                 fullNameInput.focus();
             }, 50);
         } else {
-            // Case 2: Primary key does NOT exist
+            // Case 2: Primary key does NOT exist (status 400 or other errors)
             // Enable Save and Reset buttons
             btnSave.disabled = false;
             btnReset.disabled = false;
@@ -140,18 +144,16 @@ function checkRollNo() {
             rollNoInput.disabled = false;
             inputFields.forEach(field => field.disabled = false);
 
-            showToast('Roll No does not exist. Fill form to save new record.', 'info');
+            showToast('Roll No does not exist in JPDB. Fill form to save new record.', 'info');
             
             // Move cursor to the next field (Full Name)
             setTimeout(() => {
                 fullNameInput.focus();
             }, 50);
         }
-    };
-
-    request.onerror = () => {
-        showToast('Error querying database.', 'error');
-    };
+    } catch (error) {
+        showToast('Error querying JsonPowerDB: ' + error.message, 'error');
+    }
 }
 
 // Validate inputs are not empty
@@ -176,45 +178,79 @@ function validateForm() {
         
         return false;
     }
-    return { rollNo, fullName, studentClass, birthDate, enrollmentDate, address };
+    return { rollNo, fullName, studentClass, birthDate, address, enrollmentDate };
 }
 
 // Save data to database
-function saveRecord() {
+async function saveRecord() {
     const data = validateForm();
     if (!data) return;
 
-    const transaction = db.transaction([STORE_NAME], 'readwrite');
-    const objectStore = transaction.objectStore(STORE_NAME);
-    const request = objectStore.add(data);
+    try {
+        const putReq = {
+            token: CONN_TOKEN,
+            dbName: DB_NAME,
+            rel: REL_NAME,
+            cmd: "PUT",
+            jsonStr: data
+        };
 
-    request.onsuccess = () => {
-        showToast('Student record enrolled successfully.', 'success');
-        setInitialState();
-    };
+        const response = await fetch(`${JPDB_BASE_URL}/api/iml`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(putReq)
+        });
 
-    request.onerror = (event) => {
-        showToast('Failed to save record: ' + event.target.error.message, 'error');
-    };
+        const res = await response.json();
+        
+        if (res.status === 200) {
+            showToast('Student record enrolled successfully in JsonPowerDB.', 'success');
+            setInitialState();
+        } else {
+            throw new Error(res.message || 'Failed to save record.');
+        }
+    } catch (error) {
+        showToast('Save failed: ' + error.message, 'error');
+    }
 }
 
 // Update data in database
-function updateRecord() {
+async function updateRecord() {
     const data = validateForm();
-    if (!data) return;
+    if (!data || !currentRecNo) return;
 
-    const transaction = db.transaction([STORE_NAME], 'readwrite');
-    const objectStore = transaction.objectStore(STORE_NAME);
-    const request = objectStore.put(data);
+    try {
+        const updateReq = {
+            token: CONN_TOKEN,
+            dbName: DB_NAME,
+            rel: REL_NAME,
+            cmd: "UPDATE",
+            jsonStr: {
+                [currentRecNo]: data
+            }
+        };
 
-    request.onsuccess = () => {
-        showToast('Student record updated successfully.', 'success');
-        setInitialState();
-    };
+        const response = await fetch(`${JPDB_BASE_URL}/api/iml`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(updateReq)
+        });
 
-    request.onerror = (event) => {
-        showToast('Failed to update record: ' + event.target.error.message, 'error');
-    };
+        const res = await response.json();
+        
+        if (res.status === 200) {
+            showToast('Student record updated successfully in JsonPowerDB.', 'success');
+            setInitialState();
+        } else {
+            throw new Error(res.message || 'Failed to update record.');
+        }
+    } catch (error) {
+        showToast('Update failed: ' + error.message, 'error');
+    }
 }
 
 // Event Listeners
@@ -243,12 +279,7 @@ btnSave.addEventListener('click', saveRecord);
 btnUpdate.addEventListener('click', updateRecord);
 btnReset.addEventListener('click', setInitialState);
 
-// Initialize database and set form to step 2 on page load
-window.addEventListener('DOMContentLoaded', async () => {
-    try {
-        await initDb();
-    } catch (err) {
-        console.error('Failed to init DB:', err);
-    }
+// Set form to step 2 initial state on page load
+window.addEventListener('DOMContentLoaded', () => {
     setInitialState();
 });

@@ -1,0 +1,79 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Enrollment Portal</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Main Stylesheet -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="glass-bg"></div>
+    
+    <div class="container">
+        <header>
+            <h1>SCHOOL-DB Portal</h1>
+            <p class="subtitle">Student Enrollment System</p>
+        </header>
+
+        <main class="card">
+            <form id="enrollmentForm" autocomplete="off" onsubmit="return false;">
+                <div class="form-grid">
+                    <!-- Roll No (Primary Key) -->
+                    <div class="form-group">
+                        <label for="rollNo">Roll No <span class="required">*</span></label>
+                        <input type="text" id="rollNo" name="rollNo" placeholder="Enter Roll Number" required>
+                        <span class="help-text">Press Enter or Tab to query database</span>
+                    </div>
+
+                    <!-- Full Name -->
+                    <div class="form-group">
+                        <label for="fullName">Full Name <span class="required">*</span></label>
+                        <input type="text" id="fullName" name="fullName" placeholder="Enter Full Name" required disabled>
+                    </div>
+
+                    <!-- Class -->
+                    <div class="form-group">
+                        <label for="studentClass">Class <span class="required">*</span></label>
+                        <input type="text" id="studentClass" name="studentClass" placeholder="e.g. 10th Grade" required disabled>
+                    </div>
+
+                    <!-- Birth Date -->
+                    <div class="form-group">
+                        <label for="birthDate">Birth Date <span class="required">*</span></label>
+                        <input type="date" id="birthDate" name="birthDate" required disabled>
+                    </div>
+
+                    <!-- Enrollment Date -->
+                    <div class="form-group">
+                        <label for="enrollmentDate">Enrollment Date <span class="required">*</span></label>
+                        <input type="date" id="enrollmentDate" name="enrollmentDate" required disabled>
+                    </div>
+
+                    <!-- Address -->
+                    <div class="form-group full-width">
+                        <label for="address">Address <span class="required">*</span></label>
+                        <textarea id="address" name="address" rows="3" placeholder="Enter full address" required disabled></textarea>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" id="btnSave" class="btn btn-save" disabled>Save</button>
+                    <button type="button" id="btnUpdate" class="btn btn-update" disabled>Update</button>
+                    <button type="button" id="btnReset" class="btn btn-reset" disabled>Reset</button>
+                </div>
+            </form>
+        </main>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="toast hidden"></div>
+
+    <!-- Main JS -->
+    <script src="app.js"></script>
+</body>
+</html>
